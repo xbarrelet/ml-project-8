@@ -10,17 +10,33 @@ from pyspark.ml.feature import PCA
 from pyspark.ml.linalg import Vectors, VectorUDT
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import pandas_udf, PandasUDFType, element_at, split, udf, monotonically_increasing_id
+from pyspark.sql.types import ArrayType, FloatType
+import boto3
 
-DATA_PATH = "resources/fruits-360_dataset/fruits-360/Test/"
-RESULTS_PATH = "results/"
-RESULTS_PATH2 = "results2/"
+# LOCAL CONFIG
+# DATA_PATH = "resources/fruits-360_dataset/fruits-360/Test/"
+# RESULTS_PATH = "results/"
+# PCA_RESULTS_PATH = "results_pca/"
+# spark = (SparkSession
+#          .builder
+#          .appName('local-app')
+#          .master('local')
+#          .config("spark.driver.memory", "15g")
+#          .config("spark.sql.parquet.writeLegacyFormat", 'true')
+#          .getOrCreate()
+#          )
 
-# SPARK OBJECTS
+# AWS CONFIG
+DATA_PATH = "s3://xavier-project-8-bucket/Test/"
+RESULTS_PATH = "s3://xavier-project-8-bucket/results/"
+PCA_RESULTS_PATH = "s3://xavier-project-8-bucket/results_pca/"
+
 spark = (SparkSession
          .builder
-         .appName('local-app')
-         .master('local')
+         .appName('emr-image-processing')
+         .config("spark.executor.memory", "15g")  # Adjust based on your instance type
          .config("spark.driver.memory", "15g")
+         .config("spark.executor.cores", "4")  # Adjust based on your instance type
          .config("spark.sql.parquet.writeLegacyFormat", 'true')
          .getOrCreate()
          )
@@ -189,10 +205,17 @@ def incremental_pca(spark_df, n_components=10, batch_size=1000):
 if __name__ == '__main__':
     print("Starting Spark script.\n")
 
+    #TODO: Add 'a' to s3:// in AWS notebook, it's actually a big change in performance
+
     images = spark.read.format("binaryFile") \
         .option("pathGlobFilter", "*.jpg") \
         .option("recursiveFileLookup", "true") \
         .load(DATA_PATH)
+        #
+    #  jovyan
+    #  jupyter
+
+    print(f"Loaded {images.count()} images from {DATA_PATH}")
 
     images = images.withColumn('label', element_at(split(images['path'], '/'), -2))
 
@@ -203,15 +226,16 @@ if __name__ == '__main__':
     print("The weights have been broadcasted.\n")
 
     # Featurize images and saving the results
-    # numbers_to_float_udf = udf(lambda x: [float(number) for number in x], ArrayType(FloatType()))
-    # array_to_vector_udf = udf(lambda x: Vectors.dense(x), VectorUDT())
-    # features_df = (images
-    #                .repartition(20)
-    #                .withColumn("features", featurize_udf("content"))
-    #                .withColumn("features", numbers_to_float_udf("features"))
-    #                .withColumn("features", array_to_vector_udf("features"))
-    #                .select("path", "label", "features"))
-    # features_df.write.mode("overwrite").parquet(RESULTS_PATH)
+    numbers_to_float_udf = udf(lambda x: [float(number) for number in x], ArrayType(FloatType()))
+    array_to_vector_udf = udf(lambda x: Vectors.dense(x), VectorUDT())
+    features_df = (images
+                   .repartition(20)
+                   .withColumn("features", featurize_udf("content"))
+                   .withColumn("features", numbers_to_float_udf("features"))
+                   .withColumn("features", array_to_vector_udf("features"))
+                   .select("path", "label", "features"))
+    features_df.write.mode("overwrite").parquet(RESULTS_PATH)
+    print(f"The features have been saved to {RESULTS_PATH}.\n")
 
     # Load the results back
     spark_df = spark.read.parquet(RESULTS_PATH)
@@ -221,6 +245,8 @@ if __name__ == '__main__':
     pca = PCA(k=10, inputCol="features", outputCol="pca_features")
     pca_model = pca.fit(spark_df)
     df_pca = pca_model.transform(spark_df)
+
+    df_pca.write.mode("overwrite").parquet(PCA_RESULTS_PATH)
 
     explained_variance = pca_model.explainedVariance
     print("Explained variance ratio:", explained_variance)
@@ -239,7 +265,9 @@ if __name__ == '__main__':
     #     col("pca_features").getItem(1).alias("pca_2")
     # )
 
-    # Show the results
-    # df_pca.show(5)
 
-    spark.stop()
+    # Load the results back again
+    spark_pca_df = spark.read.parquet(PCA_RESULTS_PATH)
+    print("The results with PCA have been loaded back.\n")
+
+    print(spark_pca_df.show(5))
