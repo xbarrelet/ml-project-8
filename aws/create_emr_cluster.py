@@ -1,5 +1,13 @@
 import boto3
 
+
+NUMBER_OF_PRIMARY_NODES = 1
+PRIMARY_NODE_INSTANCE_TYPE = 'm5.xlarge'
+NUMBER_OF_CORE_NODES = 3
+CORE_NODE_INSTANCE_TYPE = 'm5.xlarge'
+S3_BUCKET_NAME = 'xavier-project-8-bucket'
+
+
 if __name__ == '__main__':
     emr_client = boto3.client('emr', region_name='eu-west-3')
 
@@ -19,21 +27,21 @@ if __name__ == '__main__':
             'Name': 'Primary node',
             'Market': 'ON_DEMAND',
             'InstanceRole': 'MASTER',
-            'InstanceType': 'm5.xlarge',
-            'InstanceCount': 3,
+            'InstanceType': PRIMARY_NODE_INSTANCE_TYPE,
+            'InstanceCount': NUMBER_OF_PRIMARY_NODES,
         },
         {
             'Name': 'Core node',
             'Market': 'ON_DEMAND',
             'InstanceRole': 'CORE',
-            'InstanceType': 'm5.xlarge',
-            'InstanceCount': 1,
+            'InstanceType': CORE_NODE_INSTANCE_TYPE,
+            'InstanceCount': NUMBER_OF_CORE_NODES,
         }
     ]
 
     cluster_config = {
         'Name': cluster_name,
-        'LogUri': 's3://xavier-project-8-bucket/emr-logs/',
+        'LogUri': f's3://{S3_BUCKET_NAME}/emr-logs/',
         'ReleaseLabel': 'emr-7.3.0',
         'Applications': [
             {'Name': 'Spark'},
@@ -45,7 +53,7 @@ if __name__ == '__main__':
             {
                 'Name': 'Install Python packages',
                 'ScriptBootstrapAction': {
-                    'Path': 's3://xavier-project-8-bucket/bootstrap-emr.sh',
+                    'Path': f's3://{S3_BUCKET_NAME}/bootstrap-emr.sh',
                     'Args': []
                 }
             }
@@ -59,8 +67,7 @@ if __name__ == '__main__':
         },
         'VisibleToAllUsers': True,
         'JobFlowRole': 'EMR_EC2_DefaultRole',
-        'ServiceRole': 'EMR_DefaultRole',
-        #'SecurityConfiguration': 'your-security-configuration'
+        'ServiceRole': 'EMR_DefaultRole'
     }
 
     try:

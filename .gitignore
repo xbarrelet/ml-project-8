@@ -187,3 +187,4 @@ cached_question_*
 /lda_topics_visualisations/
 
 spark-*/
+/results_pca/
