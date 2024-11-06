@@ -7,8 +7,10 @@ from keras import Model
 from keras.src.applications.mobilenet_v2 import MobileNetV2, preprocess_input
 from keras.src.utils import img_to_array
 from pyspark.ml.feature import PCA
+from pyspark.ml.linalg import Vectors, VectorUDT
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import pandas_udf, PandasUDFType, element_at, split, col
+from pyspark.sql.functions import pandas_udf, PandasUDFType, element_at, split, col, udf
+from pyspark.sql.types import ArrayType, FloatType
 
 #
 
@@ -39,7 +41,7 @@ spark = (SparkSession
 #          .appName('emr-image-processing')
 #          .config("spark.executor.memory", MEMORY_PER_NODE)
 #          .config("spark.driver.memory", MEMORY_PER_NODE)
-#          .config("spark.executor.cores", CPU_CORES_PER_NODE)  # Adjust based on your instance type
+#          .config("spark.executor.cores", CPU_CORES_PER_NODE)
 #          .config("spark.sql.parquet.writeLegacyFormat", 'true')
 #          .getOrCreate()
 #          )
@@ -127,16 +129,16 @@ if __name__ == '__main__':
     print("The weights have been broadcasted.\n")
 
     # Featurize images and saving the results
-    # numbers_to_float_udf = udf(lambda x: [float(number) for number in x], ArrayType(FloatType()))
-    # array_to_vector_udf = udf(lambda x: Vectors.dense(x), VectorUDT())
-    # features_df = (images
-    #                .repartition(20)
-    #                .withColumn("features", featurize_udf("content"))
-    #                .withColumn("features", numbers_to_float_udf("features"))
-    #                .withColumn("features", array_to_vector_udf("features"))
-    #                .select("path", "label", "features"))
-    # features_df.write.mode("overwrite").parquet(RESULTS_PATH)
-    # print(f"The features have been saved to {RESULTS_PATH}.\n")
+    numbers_to_float_udf = udf(lambda x: [float(number) for number in x], ArrayType(FloatType()))
+    array_to_vector_udf = udf(lambda x: Vectors.dense(x), VectorUDT())
+    features_df = (images
+                   .repartition(20)
+                   .withColumn("features", featurize_udf("content"))
+                   .withColumn("features", numbers_to_float_udf("features"))
+                   .withColumn("features", array_to_vector_udf("features"))
+                   .select("path", "label", "features"))
+    features_df.write.mode("overwrite").parquet(RESULTS_PATH)
+    print(f"The features have been saved to {RESULTS_PATH}.\n")
 
     # Load the results back
     spark_df = spark.read.parquet(RESULTS_PATH)

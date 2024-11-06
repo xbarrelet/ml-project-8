@@ -45,7 +45,6 @@ if __name__ == '__main__':
         'ReleaseLabel': 'emr-7.3.0',
         'Applications': [
             {'Name': 'Spark'},
-            {'Name': 'Hadoop'},
             {'Name': 'JupyterHub'}
         ],
         'Configurations': configurations,
@@ -53,7 +52,14 @@ if __name__ == '__main__':
             {
                 'Name': 'Install Python packages',
                 'ScriptBootstrapAction': {
-                    'Path': f's3://{S3_BUCKET_NAME}/bootstrap-emr.sh',
+                    'Path': f's3://{S3_BUCKET_NAME}/scripts/bootstrap-emr.sh',
+                    'Args': []
+                }
+            },
+            {
+                'Name': 'Install CloudWatch Agent',
+                'ScriptBootstrapAction': {
+                    'Path': f's3://{S3_BUCKET_NAME}/scripts/install-cloudwatch-agent.sh',
                     'Args': []
                 }
             }
