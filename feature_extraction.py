@@ -132,6 +132,7 @@ if __name__ == '__main__':
     numbers_to_float_udf = udf(lambda x: [float(number) for number in x], ArrayType(FloatType()))
     array_to_vector_udf = udf(lambda x: Vectors.dense(x), VectorUDT())
     features_df = (images
+                    # 20 partitions
                    .repartition(20)
                    .withColumn("features", featurize_udf("content"))
                    .withColumn("features", numbers_to_float_udf("features"))
